@@ -126,13 +126,14 @@ export default {
                         setTimeout(() => reject(new Error('Request timeout')), 30000);
                     });
 
-                    const responsePromise = this.getGPT4ALLResponse(question);
-                    const gptResponse = await Promise.race([responsePromise, timeoutPromise]);
+                    // Menggunakan API Flask
+                    const responsePromise = this.getChatResponse(question);
+                    const apiResponse = await Promise.race([responsePromise, timeoutPromise]);
 
                     // Update existing message
                     const messageIndex = this.chatHistory.findIndex(msg => msg.id === messageId);
                     if (messageIndex !== -1) {
-                        this.chatHistory[messageIndex].response = gptResponse || this.getLocalResponse(question);
+                        this.chatHistory[messageIndex].response = apiResponse || this.getLocalResponse(question);
                         this.chatHistory[messageIndex].isLoading = false;
                     }
                 } catch (error) {
@@ -140,7 +141,6 @@ export default {
                     // Update with local response in case of error
                     const messageIndex = this.chatHistory.findIndex(msg => msg.id === messageId);
                     if (messageIndex !== -1) {
-
                         this.chatHistory[messageIndex].response = this.getLocalResponse(question);
                         this.chatHistory[messageIndex].isLoading = false;
                     }
@@ -157,39 +157,34 @@ export default {
             }
         }, 300),
 
-        async getGPT4ALLResponse(message) {
-    try {
-        console.log('Sending message:', message); // Debug log
+        // Fungsi baru untuk mengambil respons dari API Flask
+        async getChatResponse(message) {
+            try {
+                console.log('Sending message:', message); // Debug log
 
-        const response = await fetch('http://localhost:5000/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                prompt: message 
-            }),
-            credentials: 'include'
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Network response was not ok');
-        }
-        
-        const data = await response.json();
-        console.log('API Response:', data); // Debug log
-        
-        if (data.response && data.response.text) {
-            return data.response.text;
-        } else {
-            throw new Error('Invalid response format');
-        }
-    } catch (error) {
-        console.error('Error detail:', error);
-        return null;
-    }
-},
+                const response = await fetch('http://localhost:5000/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question: message }),
+                    credentials: 'same-origin'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Network response was not ok');
+                }
+
+                const data = await response.json();
+                console.log('API Response:', data); // Debug log
+                
+                return data.answer || this.chatResponses.default;
+            } catch (error) {
+                console.error('Error detail:', error);
+                return this.chatResponses.default;
+            }
+        },
 
         getLocalResponse(message) {
             const lowercaseMsg = message.toLowerCase();
@@ -214,6 +209,7 @@ export default {
     }
 }
 </script>
+
     
     <style scoped>
     .chat-messages {
